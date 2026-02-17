@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full">
+ <head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ค้นหาพิกัดลูกค้า</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* --- Layout Structure (สำคัญสำหรับ Scroll) --- */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; }
+    
+    body {
+      font-family: 'Kanit', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+      overflow: hidden; /* ห้าม Scroll ที่ Body เพื่อให้ Sticky Header ทำงาน */
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .app-container {
+      width: 100%;
+      height: 100%;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    /* --- 1. ส่วนหัว (Sticky Header) --- */
+    .search-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      flex-shrink: 0; /* ห้ามหด */
+      z-index: 100;
+    }
+
+    .app-header { text-align: center; margin-bottom: 20px; }
+    .app-title { font-size: 28px; font-weight: 700; color: #2d3748; margin-bottom: 4px; }
+    .app-subtitle { font-size: 14px; font-weight: 300; color: #718096; }
+    
+    .search-wrapper { position: relative; display: flex; gap: 10px; }
+    .search-input {
+      flex: 1; padding: 16px 20px; padding-left: 45px;
+      font-size: 16px; border: 2px solid #e2e8f0; border-radius: 16px;
+      background: #f8f9fa; transition: all 0.3s ease;
+      font-family: 'Kanit', sans-serif;
+    }
+    .search-input:focus { outline: none; border-color: #667eea; background: white; }
+    .search-icon-inside { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #a0aec0; }
+    .search-btn {
+      padding: 0 24px; font-size: 16px; font-weight: 600;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white; border: none; border-radius: 16px; cursor: pointer; white-space: nowrap;
+    }
+
+    /* --- 2. ส่วนผลลัพธ์ (Scrollable Area) --- */
+    .results-wrapper {
+      flex-grow: 1; /* กินพื้นที่ความสูงที่เหลือทั้งหมด */
+      overflow-y: auto; /* เลื่อนขึ้นลงได้เฉพาะส่วนนี้ */
+      margin-top: 20px;
+      padding-bottom: 20px;
+      -webkit-overflow-scrolling: touch; /* เลื่อนลื่นๆ บนมือถือ */
+      padding-right: 5px;
+    }
+    /* ปรับแต่ง Scrollbar ให้สวยงาม */
+    .results-wrapper::-webkit-scrollbar { width: 6px; }
+    .results-wrapper::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.3); border-radius: 20px; }
+
+    /* Result Card Styles */
+    .result-card {
+      background: white; border-radius: 20px; padding: 20px; margin-bottom: 16px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); border-left: 6px solid #667eea;
+      animation: fadeIn 0.4s ease-out backwards;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .result-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; }
+    .result-info { flex: 1; min-width: 0; }
+    .result-name { font-size: 18px; font-weight: 600; margin-bottom: 6px; color: #2d3748; }
+    .result-address { font-size: 14px; color: #718096; margin-bottom: 12px; }
+    
+    .coord-badge {
+      display: inline-flex; align-items: center; padding: 8px 12px;
+      background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+      font-size: 13px; font-weight: 500; color: #4a5568; cursor: pointer;
+    }
+    .map-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 10px 16px; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      border-radius: 12px; font-size: 14px; font-weight: 500; color: white; text-decoration: none;
+    }
+
+    /* --- 3. ส่วน Pagination (Fixed Bottom or inside scroll) --- */
+    .pagination-container {
+      display: flex; justify-content: center; gap: 8px; padding: 10px 0; flex-wrap: wrap;
+    }
+    .page-btn {
+      min-width: 36px; height: 36px; border-radius: 10px; border: none;
+      background: rgba(255,255,255,0.2); color: white; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+    }
+    .page-btn.active { background: white; color: #667eea; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    .page-btn:disabled { opacity: 0.5; cursor: default; }
+
+    /* Utilities */
+    .loading-container { display: none; text-align: center; padding: 20px; color: white; }
+    .spinner { width: 30px; height: 30px; border: 3px solid rgba(255, 255, 255, 0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast-notification { position: fixed; top: 20px; right: 20px; background: #38a169; color: white; padding: 12px 20px; border-radius: 12px; z-index: 1000; display: none; }
+
+    @media (max-width: 480px) {
+      .app-container { padding: 10px; }
+      .search-card { padding: 16px; }
+      .app-title { font-size: 24px; }
+      .map-btn span { display: none; }
+    }
+  </style>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+ </head>
+ <body>
+
+  <div class="app-container">
+    
+    <!-- 1. ส่วนหัว (Sticky) -->
+    <div class="search-card">
+      <div class="app-header">
+        <h1 class="app-title"><i class="fas fa-map-marked-alt text-primary me-2"></i>ค้นหาพิกัดลูกค้า</h1>
+        <p class="app-subtitle">พิมพ์ชื่อร้าน และกดค้นหา</p>
+      </div>
+      
+      <div class="search-wrapper">
+        <i class="fas fa-search search-icon-inside"></i>
+        <input type="text" id="searchInput" class="search-input" 
+               placeholder="พิมพ์ชื่อร้าน หรือ ที่อยู่..." autocomplete="off"
+               onkeyup="handleEnter(event)">
+        <button class="search-btn" id="searchBtn" onclick="initSearch()"> 
+          <i class="fas fa-search"></i> <span class="d-none d-sm-inline">ค้นหา</span> 
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-container" id="loadingContainer">
+      <div class="spinner"></div>
+      <p class="small">กำลังค้นหา...</p>
+    </div>
+
+    <!-- 2. ส่วนผลลัพธ์ (เลื่อนขึ้นลงได้) -->
+    <div class="results-wrapper" id="resultsContainer">
+      <div class="text-center text-white opacity-75 mt-5">
+        <i class="fas fa-keyboard fa-3x mb-3"></i><br>
+        พิมพ์คำค้นหา แล้วกด Enter
+      </div>
+    </div>
+    
+    <!-- 3. ส่วนเปลี่ยนหน้า -->
+    <div id="paginationContainer" class="pagination-container"></div>
+
+  </div>
+
+  <div class="toast-notification" id="toast" style="display: none;">
+    <i class="fas fa-check-circle"></i> <span id="toastText"></span>
+  </div>
+
+  <script>
+    let currentKeyword = "";
+    
+    function handleEnter(event) { if (event.key === 'Enter') initSearch(); }
+
+    function initSearch() {
+      const keyword = document.getElementById('searchInput').value.trim();
+      if (!keyword) {
+        showToast('กรุณาพิมพ์คำค้นหาก่อนครับ', true);
+        return;
+      }
+      currentKeyword = keyword;
+      doSearch(1); // เริ่มหน้า 1
+    }
+
+    function doSearch(page) {
+      document.getElementById('searchInput').blur();
+      document.getElementById('loadingContainer').style.display = 'block';
+      document.getElementById('resultsContainer').innerHTML = '';
+      document.getElementById('paginationContainer').innerHTML = '';
+      
+      google.script.run
+        .withSuccessHandler(showResults)
+        .withFailureHandler(showError)
+        .searchMasterData(currentKeyword, page);
+    }
+
+    function showResults(response) {
+      document.getElementById('loadingContainer').style.display = 'none';
+      const container = document.getElementById('resultsContainer');
+      const data = response.items;
+      
+      if (!data || data.length === 0) {
+        container.innerHTML = `
+          <div class="no-results" style="background: rgba(255,255,255,0.9); padding: 30px; border-radius: 20px; text-align: center;">
+            <div style="font-size: 40px; margin-bottom: 10px;">🤔</div>
+            <p class="text-muted fw-bold">ไม่พบข้อมูล "${currentKeyword}"</p>
+          </div>`;
+        return;
+      }
+      
+      let html = `<div class="text-white small mb-2 px-2">พบ ${response.total} รายการ (หน้า ${response.currentPage}/${response.totalPages})</div>`;
+
+      data.forEach((item, index) => {
+        const hasCoord = (item.lat && item.lng);
+        const coordDisplay = hasCoord 
+          ? `<div class="coord-badge" onclick="copyToClipboard('${item.lat}, ${item.lng}')">
+               <i class="fas fa-crosshairs text-danger me-1"></i> ${item.lat}, ${item.lng}
+             </div>`
+          : `<span class="badge bg-light text-danger border">ไม่มีพิกัด</span>`;
+        
+        const mapButton = hasCoord
+          ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lng}" target="_blank" class="map-btn">
+               <i class="fas fa-location-arrow me-2"></i> <span>นำทาง</span>
+             </a>`
+          : '';
+        
+        html += `
+          <div class="result-card" style="animation-delay: ${index * 0.05}s">
+            <div class="result-header">
+              <div class="result-info">
+                <h3 class="result-name">${item.name}</h3>
+                <p class="result-address">
+                  <i class="fas fa-map-marker-alt text-muted mt-1"></i>
+                  <span>${item.address || 'ไม่ระบุที่อยู่'}</span>
+                </p>
+                ${coordDisplay}
+              </div>
+              <div class="result-actions">${mapButton}</div>
+            </div>
+          </div>
+        `;
+      });
+      
+      container.innerHTML = html;
+      renderPagination(response.totalPages, response.currentPage);
+    }
+
+    function renderPagination(totalPages, currentPage) {
+      if (totalPages <= 1) return;
+      const container = document.getElementById('paginationContainer');
+      let html = '';
+
+      html += `<button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="doSearch(${currentPage - 1})"><i class="fas fa-chevron-left"></i></button>`;
+
+      let startPage = Math.max(1, currentPage - 1);
+      let endPage = Math.min(totalPages, currentPage + 1);
+      
+      if (startPage > 1) html += `<button class="page-btn" onclick="doSearch(1)">1</button>`;
+      if (startPage > 2) html += `<span class="text-white self-end pb-2">...</span>`;
+
+      for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="doSearch(${i})">${i}</button>`;
+      }
+
+      if (endPage < totalPages - 1) html += `<span class="text-white self-end pb-2">...</span>`;
+      if (endPage < totalPages) html += `<button class="page-btn" onclick="doSearch(${totalPages})">${totalPages}</button>`;
+
+      html += `<button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="doSearch(${currentPage + 1})"><i class="fas fa-chevron-right"></i></button>`;
+      container.innerHTML = html;
+    }
+
+    function showError(err) {
+      document.getElementById('loadingContainer').style.display = 'none';
+      alert("Error: " + err.message);
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast(`คัดลอกพิกัดแล้ว: ${text}`);
+      }).catch(() => {});
+    }
+
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastText').innerText = message;
+      toast.style.display = 'flex';
+      toast.style.backgroundColor = isError ? '#e53e3e' : '#38a169';
+      setTimeout(() => { toast.style.display = 'none'; }, 2000);
+    }
+  </script>
+ </body>
+</html>
